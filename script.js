@@ -2558,7 +2558,7 @@ function handleSummaryOutput(choice) {
 // ==============================================
 
 /**
- * แสดงข้อความเริ่มต้นในตารางสรุปรายวัน
+ * แสดงข้อความเริ่มต้นในตารางสรุปรายวัน และเคลียร์ข้อความสรุปด้านบน
  */
 function resetDailySummaryTable() {
     const tbody = document.getElementById("daily-summary-body");
@@ -2571,47 +2571,12 @@ function resetDailySummaryTable() {
             </td>
         </tr>
     `;
-}
-
-/**
- * คำนวณสรุปข้อมูลแต่ละวันและเก็บไว้ใน dailySummaryData
- */
-function calculateDailySummaries() {
-    if (!currentAccount || records.length === 0) {
-        dailySummaryData = {};
-        resetDailySummaryTable();   // ✅ ไม่ render อัตโนมัติ
-        return;
+    
+    // เคลียร์ส่วนรายละเอียดข้อความด้านบน (ถ้ามี)
+    const headerContainer = document.getElementById("daily-summary-header");
+    if (headerContainer) {
+        headerContainer.innerHTML = '';
     }
-    
-    // กรองเฉพาะ records ของบัญชีปัจจุบัน
-    const accountRecords = records.filter(record => record.account === currentAccount);
-    if (accountRecords.length === 0) {
-        dailySummaryData = {};
-        resetDailySummaryTable();   // ✅ ไม่ render อัตโนมัติ
-        return;
-    }
-    
-    const accountSpecificTypes = accountTypes.get(currentAccount);
-    const summaryByDate = {};
-    
-    accountRecords.forEach(record => {
-        const date = record.dateTime.split(' ')[0]; // ดึงเฉพาะวันที่ YYYY-MM-DD
-        
-        if (!summaryByDate[date]) {
-            summaryByDate[date] = { income: 0, expense: 0 };
-        }
-        
-        if (accountSpecificTypes["รายรับ"].includes(record.type)) {
-            summaryByDate[date].income += record.amount;
-        } else if (accountSpecificTypes["รายจ่าย"].includes(record.type)) {
-            summaryByDate[date].expense += record.amount;
-        }
-    });
-    
-    dailySummaryData = summaryByDate;
-    
-    // ✅ สำคัญ: ไม่ render ตารางตรงนี้อีกต่อไป
-    resetDailySummaryTable();
 }
 
 /**
@@ -2703,59 +2668,93 @@ function renderDailySummaryTable() {
 }
 
 /**
- * แสดงสรุปตามช่วงวันที่ที่เลือก (ปุ่มกด)
+ * แสดงข้อความสรุปรายวัน (นอกตาราง)
  */
-function showDailySummaryByRange() {
-    console.log("-> กดปุ่มแสดงสรุปตามช่วงที่เลือก");
-    let startDate = document.getElementById('dailyStartDate').value;
-    let endDate = document.getElementById('dailyEndDate').value;
+function renderDailySummaryHeader(startDateStr, endDateStr, activeDaysCount) {
+    const startObj = new Date(startDateStr); 
+    startObj.setHours(0, 0, 0, 0);
+    const endObj = new Date(endDateStr); 
+    endObj.setHours(23, 59, 59, 999);
 
-    if (!startDate || !endDate) {
-        showToast('⚠️ กรุณาเลือกวันที่เริ่มต้นและสิ้นสุดให้ครบก่อน', 'error');
-        return;
+    // ใช้ generateSummaryData เพื่อดึงสถิติยอดรวมและการแยกประเภท
+    const summaryResult = generateSummaryData(startObj, endObj);
+    if (!summaryResult) return;
+    const summary = summaryResult.summary;
+
+    const now = new Date();
+    const summaryDateTime = now.toLocaleDateString('th-TH', {
+        year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+    }) + ' น.';
+
+    const startThai = formatThaiDate(startDateStr);
+    const endThai = formatThaiDate(endDateStr);
+
+    // คำนวณจำนวนวันทั้งหมดและวันที่ไม่มีการทำธุรกรรม
+    const calculatedTotalDays = Math.round((endObj - startObj) / (1000 * 60 * 60 * 24)) + 1;
+    const inactiveDaysCount = calculatedTotalDays - activeDaysCount;
+
+    // สร้างข้อความแยกตามประเภท รายรับ
+    let incomeHTML = '';
+    for (const typeKey in summary.income) {
+        incomeHTML += `<p style="margin: 2px 0 2px 15px; color: #555;">- ${typeKey} : ${summary.income[typeKey].count} ครั้ง เป็นเงิน ${summary.income[typeKey].amount.toLocaleString()} บาท</p>`;
     }
 
-    if (startDate > endDate) {
-        showToast('⚠️ วันที่เริ่มต้นต้องน้อยกว่าหรือเท่ากับวันที่สิ้นสุด', 'error');
-        return;
+    // สร้างข้อความแยกตามประเภท รายจ่าย
+    let expenseHTML = '';
+    for (const typeKey in summary.expense) {
+        expenseHTML += `<p style="margin: 2px 0 2px 15px; color: #555;">- ${typeKey} : ${summary.expense[typeKey].count} ครั้ง เป็นเงิน ${summary.expense[typeKey].amount.toLocaleString()} บาท</p>`;
     }
 
-    // กรณีข้อมูลสรุปว่างเปล่า ให้บังคับคำนวณใหม่อีกครั้งเพื่อความชัวร์
-    if (!dailySummaryData || Object.keys(dailySummaryData).length === 0) {
-        calculateDailySummaries();
-        if (!dailySummaryData || Object.keys(dailySummaryData).length === 0) {
-            showToast('⚠️ ไม่มีข้อมูลธุรกรรมในบัญชีนี้เลย', 'error');
-            return;
-        }
+    // คำนวณสรุปกำไรขาดทุนสุทธิ
+    let comparisonText = '';
+    let differenceAmount = 0;
+    if (summary.totalIncome > summary.totalExpense) {
+        differenceAmount = summary.totalIncome - summary.totalExpense;
+        comparisonText = `<span style="color: blue;">รายได้มากกว่ารายจ่าย = ${differenceAmount.toLocaleString()} บาท</span>`;
+    } else if (summary.totalIncome < summary.totalExpense) {
+        differenceAmount = summary.totalExpense - summary.totalIncome;
+        comparisonText = `<span style="color: red;">รายจ่ายมากกว่ารายได้ = ${differenceAmount.toLocaleString()} บาท</span>`;
+    } else {
+        comparisonText = 'รายได้เท่ากับรายจ่าย';
     }
 
-    const filteredData = {};
-    let hasData = false;
+    // จัดรูปแบบ HTML
+    const htmlContent = `
+        <div style="background-color: #fcfcfc; border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 15px; text-align: left; font-size: 14px;">
+            <p style="margin: 0 0 5px 0;"><strong>ชื่อบัญชี:</strong> ${currentAccount}</p>
+            <p style="margin: 0 0 5px 0;"><strong>สรุปเมื่อวันที่ :</strong> ${summaryDateTime}</p>
+            <p style="margin: 0 0 5px 0;"><strong>สรุปวันที่ :</strong> ${startDateStr === endDateStr ? startThai : `${startThai} ถึง ${endThai}`}</p>
+            <p style="margin: 0 0 5px 0;">จำนวน ${calculatedTotalDays} วัน</p>
+            <p style="margin: 0 0 10px 0;">ทำธุรกรรม ${activeDaysCount} วัน, ไม่ได้ทำ ${inactiveDaysCount} วัน</p>
+            
+            <p style="margin: 5px 0 2px 0;"><strong>รายรับ :</strong> <span style="color: #28a745;">${summary.incomeCount} ครั้ง เป็นเงิน ${summary.totalIncome.toLocaleString()} บาท</span></p>
+            ${incomeHTML}
+            
+            <p style="margin: 10px 0 2px 0;"><strong>รายจ่าย :</strong> <span style="color: #dc3545;">${summary.expenseCount} ครั้ง เป็นเงิน ${summary.totalExpense.toLocaleString()} บาท</span></p>
+            ${expenseHTML}
+            
+            <hr style="border: 0.5px solid #ccc; margin: 10px 0;">
+            <p style="margin: 5px 0 0 0; font-size: 15px;"><strong>สรุป :</strong> ${comparisonText}</p>
+        </div>
+    `;
 
-    Object.keys(dailySummaryData).forEach(date => {
-        // กรองเฉพาะวันที่อยู่ในช่วงที่เลือก
-        if (date >= startDate && date <= endDate) {
-            filteredData[date] = dailySummaryData[date];
-            hasData = true;
-        }
-    });
-
-    if (!hasData) {
-        showToast('⚠️ ไม่มีข้อมูลความเคลื่อนไหวในช่วงวันที่เลือก', 'error');
+    // แทรก HTML ด้านบนตาราง
+    let headerContainer = document.getElementById("daily-summary-header");
+    if (!headerContainer) {
         const tbody = document.getElementById("daily-summary-body");
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #dc3545;">ไม่มีข้อมูลความเคลื่อนไหวในช่วงวันที่เลือก</td></tr>';
+            const table = tbody.closest('table');
+            headerContainer = document.createElement('div');
+            headerContainer.id = "daily-summary-header";
+            // วาง div ใหม่ไว้ก่อนหน้า table
+            table.parentNode.insertBefore(headerContainer, table);
         }
-        return;
     }
-
-    // สลับตัวแปรชั่วคราวเพื่อส่งให้ renderDailySummaryTable สร้างตาราง
-    const tempData = dailySummaryData;
-    dailySummaryData = filteredData;
-    renderDailySummaryTable();
-    dailySummaryData = tempData; // คืนค่าตัวแปรหลักกลับ
-
-    showToast('✅ แสดงสรุปผลเรียบร้อย', 'success');
+    
+    if (headerContainer) {
+        headerContainer.innerHTML = htmlContent;
+    }
 }
 
 /**
@@ -2813,10 +2812,13 @@ function calculateLastXRange() {
 }
 
 /**
- * แสดงสรุปตามช่วงวันที่ที่เลือก
+ * แสดงสรุปตามช่วงวันที่ที่เลือก (อัปเดตใหม่รวมให้เหลือฟังก์ชันเดียว)
  */
 function showDailySummaryByRange() {
-    const mode = document.querySelector('input[name="dailyMode"]:checked').value;
+    console.log("-> กดปุ่มแสดงสรุปตามช่วงที่เลือก");
+    // ตรวจสอบโหมดถ้ามีการเลือก (รองรับทั้งแบบมีและไม่มีปุ่มวิทยุ)
+    const modeInput = document.querySelector('input[name="dailyMode"]:checked');
+    const mode = modeInput ? modeInput.value : 'range';
     
     let startDate = document.getElementById('dailyStartDate').value;
     let endDate = document.getElementById('dailyEndDate').value;
@@ -2831,19 +2833,36 @@ function showDailySummaryByRange() {
         return;
     }
     
+    // บังคับคำนวณใหม่เพื่อความชัวร์ ถ้าข้อมูลว่างเปล่า
+    if (!dailySummaryData || Object.keys(dailySummaryData).length === 0) {
+        calculateDailySummaries();
+    }
+    
     const filteredData = {};
+    let hasData = false;
+    
     Object.keys(dailySummaryData).forEach(date => {
         if (date >= startDate && date <= endDate) {
             filteredData[date] = dailySummaryData[date];
+            hasData = true;
         }
     });
     
-    if (Object.keys(filteredData).length === 0) {
+    if (!hasData) {
         showToast('⚠️ ไม่มีข้อมูลในช่วงวันที่เลือก', 'error');
+        resetDailySummaryTable();
+        const tbody = document.getElementById("daily-summary-body");
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #dc3545;">ไม่มีข้อมูลความเคลื่อนไหวในช่วงวันที่เลือก</td></tr>';
+        }
         return;
     }
+
+    // 1. เรียกใช้งานฟังก์ชันเพื่อแสดงข้อความสรุปด้านบน
+    const activeDaysCount = Object.keys(filteredData).length;
+    renderDailySummaryHeader(startDate, endDate, activeDaysCount);
     
-    // แสดงเฉพาะตาราง (ไม่แสดงข้อความสรุป)
+    // 2. แสดงเฉพาะตาราง
     const tempData = dailySummaryData;
     dailySummaryData = filteredData;
     renderDailySummaryTable();
