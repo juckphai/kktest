@@ -1,0 +1,169 @@
+✅ ความสามารถใหม่ที่เพิ่มให้
+
+ในส่วน 📊 สรุปผลแต่ละวัน
+
+ผู้ใช้จะเลือกได้ 2 โหมด:
+
+🔘 โหมดที่ 1: เลือกช่วงวันที่เอง
+
+จากวันที่ → ถึงวันที่
+
+เหมือนที่ทำไว้แล้ว
+
+🔘 โหมดที่ 2: เลือก “X วันล่าสุด”
+
+ใส่จำนวนวันเอง (เช่น 7 / 15 / 30)
+
+ระบบคำนวณให้ทันทีว่า
+
+เริ่มจากวันไหน
+
+ถึงวันไหน
+
+แสดงช่วงวันที่ให้เห็นชัดเจน
+
+กดแสดงสรุปได้เลย
+
+Export เป็นภาพได้เหมือนเดิม
+
+🔵 1️⃣ แก้ไข index.html
+🔹 เพิ่ม UI เลือกโหมด + จำนวนวัน
+
+ให้เพิ่มส่วนนี้ใต้หัวข้อ “เลือกช่วงวันที่สำหรับสรุปผลแต่ละวัน”
+
+<!-- 🔷 โหมดการเลือกช่วงวันที่ -->
+<div style="margin-top:15px; text-align:center;">
+
+  <div style="margin-bottom:10px;">
+    <label>
+      <input type="radio" name="dailyMode" value="range" checked>
+      เลือกช่วงวันที่เอง
+    </label>
+
+    <label style="margin-left:20px;">
+      <input type="radio" name="dailyMode" value="lastX">
+      แสดง X วันล่าสุด
+    </label>
+  </div>
+
+  <!-- 🔹 ส่วนใส่จำนวนวัน -->
+  <div id="lastXContainer" style="display:none; margin-top:10px;">
+    <label>จำนวนวัน:</label>
+    <input type="number" id="lastXDays" min="1" placeholder="เช่น 7">
+
+    <button onclick="calculateLastXRange()" 
+            style="margin-left:10px; background-color:#28a745;">
+      คำนวณช่วงวันที่
+    </button>
+
+    <div id="lastXPreview" style="margin-top:10px; font-weight:bold;"></div>
+  </div>
+
+</div>
+🔵 2️⃣ เพิ่ม Script ใน script.js
+🔹 2.1 ควบคุมการสลับโหมด
+
+เพิ่มฟังก์ชันนี้:
+
+document.querySelectorAll('input[name="dailyMode"]').forEach(radio => {
+    radio.addEventListener("change", function() {
+        const mode = this.value;
+
+        if (mode === "lastX") {
+            document.getElementById("lastXContainer").style.display = "block";
+        } else {
+            document.getElementById("lastXContainer").style.display = "none";
+            document.getElementById("lastXPreview").innerHTML = "";
+        }
+    });
+});
+🔹 2.2 ฟังก์ชันคำนวณ X วันล่าสุด
+function calculateLastXRange() {
+
+    const days = parseInt(document.getElementById("lastXDays").value);
+
+    if (!days || days <= 0) {
+        showToast("⚠️ กรุณาระบุจำนวนวันที่ถูกต้อง", "error");
+        return;
+    }
+
+    if (!dailySummaryData || Object.keys(dailySummaryData).length === 0) {
+        showToast("⚠️ ไม่มีข้อมูลสำหรับคำนวณ", "error");
+        return;
+    }
+
+    const dates = Object.keys(dailySummaryData).sort();
+
+    const endDate = dates[dates.length - 1];
+
+    const end = new Date(endDate);
+    const start = new Date(end);
+    start.setDate(end.getDate() - days + 1);
+
+    const startDate = start.toISOString().split("T")[0];
+
+    // ใส่ค่าอัตโนมัติลงช่อง date
+    document.getElementById("dailyStartDate").value = startDate;
+    document.getElementById("dailyEndDate").value = endDate;
+
+    document.getElementById("lastXPreview").innerHTML =
+        `ช่วงวันที่: ${startDate} ถึง ${endDate}`;
+
+    showToast("✅ คำนวณช่วงวันที่เรียบร้อย", "success");
+}
+🔹 2.3 ปรับ showDailySummaryByRange()
+
+ให้รองรับทั้ง 2 โหมด (เพิ่มเช็คเล็กน้อยด้านบน)
+
+function showDailySummaryByRange() {
+
+    const mode = document.querySelector('input[name="dailyMode"]:checked').value;
+
+    let startDate = document.getElementById("dailyStartDate").value;
+    let endDate = document.getElementById("dailyEndDate").value;
+
+    if (!startDate || !endDate) {
+        showToast("⚠️ กรุณาเลือกหรือคำนวณช่วงวันที่ก่อน", "error");
+        return;
+    }
+
+    if (new Date(startDate) > new Date(endDate)) {
+        showToast("⚠️ วันที่เริ่มต้นต้องไม่มากกว่าวันที่สิ้นสุด", "error");
+        return;
+    }
+
+    const filteredData = {};
+
+    Object.keys(dailySummaryData).forEach(date => {
+        if (date >= startDate && date <= endDate) {
+            filteredData[date] = dailySummaryData[date];
+        }
+    });
+
+    if (Object.keys(filteredData).length === 0) {
+        showToast("⚠️ ไม่มีข้อมูลในช่วงวันที่เลือก", "error");
+        return;
+    }
+
+    renderDailySummary(filteredData);
+
+    document.getElementById("daily-summary-section").style.display = "block";
+
+    showToast("✅ แสดงสรุปผลเรียบร้อย", "success");
+}
+🎯 ผลลัพธ์สุดท้าย
+
+ผู้ใช้สามารถ:
+
+✅ เลือกช่วงวันที่เอง
+
+หรือ
+
+✅ ใส่จำนวนวันล่าสุด เช่น 7 วัน
+
+ระบบจะแสดง:
+
+ช่วงวันที่: 2026-02-25 ถึง 2026-03-03
+
+แล้วกดแสดงสรุปได้ทันที
+และ Export เป็นภาพได้เหมือนเดิม
