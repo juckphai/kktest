@@ -531,7 +531,7 @@ function setupSummaryControlsAndSave() {
             showToast("❌ ขออภัย, ไม่สามารถบันทึกเป็นรูปภาพได้", 'error');
         }).finally(() => {
             if(actionButtons) actionButtons.style.display = '';
-            controlGroups.forEach(el => el.style.display = '';
+            controlGroups.forEach(el => el.style.display = '');
             if(closeBtn) closeBtn.style.display = '';
             modalContentContainer.style.padding = '';
         });
@@ -584,7 +584,7 @@ function setupSummaryControlsAndSave() {
             }
         } finally {
             if(actionButtons) actionButtons.style.display = '';
-            controlGroups.forEach(el => el.style.display = '';
+            controlGroups.forEach(el => el.style.display = '');
             if(closeBtn) closeBtn.style.display = '';
             modalContentContainer.style.padding = '';
         }
@@ -2871,105 +2871,8 @@ function showDailySummaryByRange() {
     showToast('✅ แสดงสรุปผลเรียบร้อย', 'success');
 }
 
-// ==============================================
-// ✅ ฟังก์ชันใหม่สำหรับบันทึกสรุปแต่ละวันเป็นรูปภาพ
-// ==============================================
-
 /**
- * ปรับปรุง: บันทึกเฉพาะส่วนรายละเอียดสรุปรายวัน (นอกตาราง) เป็นรูปภาพ และจัดข้อความกึ่งกลาง
- */
-async function saveDailySummaryAsImage() {
-    showLoading(); // แสดงตัวโหลด
-
-    // 1. เป้าหมายการบันทึก: เลือกเฉพาะส่วนหัวสรุปรายละเอียด (Daily Summary Header)
-    // ซึ่งได้สร้างไว้จากการปรับปรุงครั้งก่อน
-    const reportElement = document.getElementById("daily-summary-header");
-
-    if (!reportElement) {
-        console.error("ไม่พบ element #daily-summary-header");
-        hideLoading();
-        // แจ้งเตือนผู้ใช้ว่าต้องกดแสดงสรุปก่อนเพื่อให้ส่วนนี้ปรากฏ
-        showToast('⚠️ ไม่พบข้อมูลสรุปที่ต้องการบันทึก กรุณากด "แสดงสรุป" ก่อน', 'error');
-        return;
-    }
-
-    // ตรวจสอบว่ามีข้อมูลอยู่จริงภายใน element
-    if (reportElement.innerHTML.trim() === "") {
-        hideLoading();
-        showToast('⚠️ ไม่มีข้อมูลสรุปที่ต้องการบันทึก', 'error');
-        return;
-    }
-
-    // 2. จัดเก็บสไตล์เดิมไว้ และจัดย่อหน้าให้อยู่กึ่งกลางชั่วคราวเพื่อบันทึกภาพ
-    // เพื่อให้หน้าจอแสดงผลเหมือนเดิม แต่รูปที่บันทึกออกมาจัดกึ่งกลาง
-
-    // ค้นหา div ชั้นในที่มีสไตล์ขอบและพื้นหลัง
-    const innerDiv = reportElement.querySelector('div');
-    const originalInnerTextRaw = innerDiv ? innerDiv.style.cssText : '';
-
-    // เก็บลักษณะเดิมของย่อหน้า (p) ทั้งหมด
-    const paragraphs = reportElement.querySelectorAll('p');
-    const originalPStyles = [];
-    paragraphs.forEach((p, index) => {
-        originalPStyles[index] = p.style.cssText;
-
-        // จัดย่อหน้าทั้งหมดให้อยู่กึ่งกลาง
-        p.style.textAlign = 'center';
-        // ลบ Margin ซ้ายที่เคยใช้จัดระเบียบหัวข้อย่อยออก
-        p.style.marginLeft = '0'; 
-    });
-
-    try {
-        // ใช้ html2canvas บันทึกเฉพาะส่วนรายละเอียดนี้
-        const canvas = await html2canvas(reportElement, {
-            scale: 2, // เพิ่มความละเอียดภาพเป็น 2 เท่า
-            useCORS: true, // รองรับภาพข้าม Domain (ถ้ามี)
-            backgroundColor: "#ffffff", // กำหนดพื้นหลังเป็นสีขาว
-            logging: false, // ปิด Log ของ html2canvas
-        });
-
-        // แปลง Canvas เป็น Data URL
-        const image = canvas.toDataURL("image/png");
-
-        // ดึงวันที่เลือกมาใช้ตั้งชื่อไฟล์
-        const startDateStr = document.getElementById('dailyStartDate')?.value;
-        const endDateStr = document.getElementById('dailyEndDate')?.value;
-        let dateSuffix = '';
-        if (startDateStr && endDateStr) {
-            dateSuffix = startDateStr === endDateStr ? `_${startDateStr}` : `_${startDateStr}_ถึง_${endDateStr}`;
-        }
-
-        const now = new Date();
-        const timestamp = now.getFullYear() +
-            ('0' + (now.getMonth() + 1)).slice(-2) +
-            ('0' + now.getDate()).slice(-2) + '_' +
-            ('0' + now.getHours()).slice(-2) +
-            ('0' + now.getMinutes()).slice(-2);
-
-        // สร้าง Link ชั่วคราวเพื่อดาวน์โหลด
-        const downloadLink = document.createElement("a");
-        downloadLink.href = image;
-        downloadLink.download = `รายละเอียดสรุปรายวัน${dateSuffix}_${timestamp}.png`;
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
-        document.body.removeChild(downloadLink);
-
-        showToast('✅ บันทึกรูปภาพรายละเอียดเรียบร้อย', 'success');
-    } catch (error) {
-        console.error("html2canvas error:", error);
-        showToast('⚠️ เกิดข้อผิดพลาดในการบันทึกภาพ', 'error');
-    } finally {
-        // 3. คืนค่าสไตล์เดิมกลับมา (เพื่อให้หน้าจอแสดงผลเหมือนเดิมทุกประการ)
-        paragraphs.forEach((p, index) => {
-            p.style.cssText = originalPStyles[index];
-        });
-
-        hideLoading(); // ปิดตัวโหลด
-    }
-}
-
-/**
- * บันทึกสรุปแต่ละวันเป็นรูปภาพ (ฟังก์ชันเดิม เก็บไว้สำหรับบันทึกทั้งตาราง)
+ * บันทึกสรุปแต่ละวันเป็นรูปภาพ
  */
 function shareDailySummary() {
     const element = document.getElementById("daily-summary-section");
@@ -3006,42 +2909,6 @@ function shareDailySummary() {
         if (shareBtn) shareBtn.style.display = '';
         showToast('❌ ไม่สามารถบันทึกเป็นรูปภาพได้', 'error');
     });
-}
-
-/**
- * แสดง Loading
- */
-function showLoading() {
-    let loadingEl = document.getElementById('global-loading');
-    if (!loadingEl) {
-        loadingEl = document.createElement('div');
-        loadingEl.id = 'global-loading';
-        loadingEl.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-        `;
-        loadingEl.innerHTML = '<div style="background: white; padding: 20px; border-radius: 8px;">⏳ กำลังประมวลผล...</div>';
-        document.body.appendChild(loadingEl);
-    }
-    loadingEl.style.display = 'flex';
-}
-
-/**
- * ซ่อน Loading
- */
-function hideLoading() {
-    const loadingEl = document.getElementById('global-loading');
-    if (loadingEl) {
-        loadingEl.style.display = 'none';
-    }
 }
 
 // ==============================================
