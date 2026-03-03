@@ -2615,29 +2615,80 @@ function calculateDailySummaries() {
 }
 
 /**
+ * คำนวณสรุปข้อมูลแต่ละวันและเก็บไว้ใน dailySummaryData
+ */
+function calculateDailySummaries() {
+    console.log("-> กำลังคำนวณข้อมูลสรุปรายวัน...");
+    if (!currentAccount || records.length === 0) {
+        dailySummaryData = {};
+        resetDailySummaryTable();
+        return;
+    }
+
+    const accountRecords = records.filter(record => record.account === currentAccount);
+    if (accountRecords.length === 0) {
+        dailySummaryData = {};
+        resetDailySummaryTable();
+        return;
+    }
+
+    // ป้องกันกรณี accountTypes ยังไม่ได้ถูกสร้าง
+    if (!accountTypes.has(currentAccount)) {
+        initializeAccountTypes(currentAccount);
+    }
+    const accountSpecificTypes = accountTypes.get(currentAccount);
+    const summaryByDate = {};
+
+    accountRecords.forEach(record => {
+        // ป้องกัน Error กรณีไม่มีข้อมูล dateTime
+        if (!record.dateTime) return;
+        const dateParts = record.dateTime.split(' ');
+        if (dateParts.length === 0) return;
+        
+        const date = dateParts[0]; // ดึงเฉพาะ YYYY-MM-DD
+
+        if (!summaryByDate[date]) {
+            summaryByDate[date] = { income: 0, expense: 0 };
+        }
+
+        // ป้องกัน Error กรณีโครงสร้างประเภทบัญชีสูญหาย
+        if (accountSpecificTypes) {
+            if (accountSpecificTypes["รายรับ"] && accountSpecificTypes["รายรับ"].includes(record.type)) {
+                summaryByDate[date].income += parseFloat(record.amount) || 0;
+            } else if (accountSpecificTypes["รายจ่าย"] && accountSpecificTypes["รายจ่าย"].includes(record.type)) {
+                summaryByDate[date].expense += parseFloat(record.amount) || 0;
+            }
+        }
+    });
+
+    dailySummaryData = summaryByDate;
+    console.log("คำนวณเสร็จสิ้น พบข้อมูลที่มีความเคลื่อนไหวจำนวน:", Object.keys(dailySummaryData).length, "วัน");
+    resetDailySummaryTable();
+}
+
+/**
  * แสดงสรุปแต่ละวันเป็นตาราง (ฟังก์ชันหลัก)
  */
 function renderDailySummaryTable() {
     const tbody = document.getElementById("daily-summary-body");
-    if (!tbody) return;
-    
-    if (!dailySummaryData || Object.keys(dailySummaryData).length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #999;">ไม่มีข้อมูลสรุป</td></tr>';
+    if (!tbody) {
+        console.error("❌ หา ID: daily-summary-body ไม่เจอในหน้า HTML");
         return;
     }
-    
+
+    if (!dailySummaryData || Object.keys(dailySummaryData).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #dc3545;">ไม่มีข้อมูลสรุปในช่วงวันที่เลือก</td></tr>';
+        return;
+    }
+
     tbody.innerHTML = "";
-    
-    // เรียงวันที่จากล่าสุดไปหาเก่าสุด
     const sortedDates = Object.keys(dailySummaryData).sort((a, b) => new Date(b) - new Date(a));
-    
+
     sortedDates.forEach(date => {
         const sum = dailySummaryData[date];
         const diff = sum.income - sum.expense;
-        
-        // แปลงวันที่เป็นรูปแบบไทย
         const thaiDate = formatThaiDate(date);
-        
+
         const row = document.createElement('tr');
         row.innerHTML = `
             <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">${thaiDate}</td>
@@ -2652,110 +2703,59 @@ function renderDailySummaryTable() {
 }
 
 /**
- * สร้างข้อความสรุปรายละเอียดสำหรับวันที่เลือก
+ * แสดงสรุปตามช่วงวันที่ที่เลือก (ปุ่มกด)
  */
-function generateDailySummaryText(selectedDate) {
-    if (!currentAccount) return "❌ กรุณาเลือกบัญชีก่อน";
-    if (!selectedDate) return "❌ กรุณาเลือกวันที่";
-    
-    // กรองข้อมูลเฉพาะวันที่เลือก
-    const dateRecords = records.filter(record => 
-        record.account === currentAccount && 
-        record.dateTime.startsWith(selectedDate)
-    );
-    
-    if (dateRecords.length === 0) {
-        return `❌ ไม่พบข้อมูลในวันที่ ${formatThaiDate(selectedDate)}`;
+function showDailySummaryByRange() {
+    console.log("-> กดปุ่มแสดงสรุปตามช่วงที่เลือก");
+    let startDate = document.getElementById('dailyStartDate').value;
+    let endDate = document.getElementById('dailyEndDate').value;
+
+    if (!startDate || !endDate) {
+        showToast('⚠️ กรุณาเลือกวันที่เริ่มต้นและสิ้นสุดให้ครบก่อน', 'error');
+        return;
     }
-    
-    const accountSpecificTypes = accountTypes.get(currentAccount);
-    
-    // คำนวณสรุป
-    let incomeTotal = 0;
-    let expenseTotal = 0;
-    let incomeCount = 0;
-    let expenseCount = 0;
-    const incomeByType = {};
-    const expenseByType = {};
-    
-    dateRecords.forEach(record => {
-        if (accountSpecificTypes["รายรับ"].includes(record.type)) {
-            incomeTotal += record.amount;
-            incomeCount++;
-            
-            if (!incomeByType[record.type]) {
-                incomeByType[record.type] = { amount: 0, count: 0 };
-            }
-            incomeByType[record.type].amount += record.amount;
-            incomeByType[record.type].count++;
-            
-        } else if (accountSpecificTypes["รายจ่าย"].includes(record.type)) {
-            expenseTotal += record.amount;
-            expenseCount++;
-            
-            if (!expenseByType[record.type]) {
-                expenseByType[record.type] = { amount: 0, count: 0 };
-            }
-            expenseByType[record.type].amount += record.amount;
-            expenseByType[record.type].count++;
+
+    if (startDate > endDate) {
+        showToast('⚠️ วันที่เริ่มต้นต้องน้อยกว่าหรือเท่ากับวันที่สิ้นสุด', 'error');
+        return;
+    }
+
+    // กรณีข้อมูลสรุปว่างเปล่า ให้บังคับคำนวณใหม่อีกครั้งเพื่อความชัวร์
+    if (!dailySummaryData || Object.keys(dailySummaryData).length === 0) {
+        calculateDailySummaries();
+        if (!dailySummaryData || Object.keys(dailySummaryData).length === 0) {
+            showToast('⚠️ ไม่มีข้อมูลธุรกรรมในบัญชีนี้เลย', 'error');
+            return;
+        }
+    }
+
+    const filteredData = {};
+    let hasData = false;
+
+    Object.keys(dailySummaryData).forEach(date => {
+        // กรองเฉพาะวันที่อยู่ในช่วงที่เลือก
+        if (date >= startDate && date <= endDate) {
+            filteredData[date] = dailySummaryData[date];
+            hasData = true;
         }
     });
-    
-    const diff = incomeTotal - expenseTotal;
-    const diffText = diff >= 0 ? `รายได้มากกว่ารายจ่าย = ${diff.toLocaleString()} บาท` : `รายจ่ายมากกว่ารายได้ = ${Math.abs(diff).toLocaleString()} บาท`;
-    const diffColor = diff >= 0 ? 'blue' : 'red';
-    
-    // สร้างข้อความสรุป
-    let summaryText = `ชื่อบัญชี: ${currentAccount}\n\n`;
-    summaryText += `สรุปเมื่อวันที่ : ${new Date().toLocaleString("th-TH", { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'})} น.\n\n`;
-    summaryText += `สรุปข้อมูลวันที่เลือก : ${formatThaiDate(selectedDate)}\n\n`;
-    
-    summaryText += `รายรับ : ${incomeCount} ครั้ง เป็นเงิน ${incomeTotal.toLocaleString()} บาท\n`;
-    for (const type in incomeByType) {
-        summaryText += `- ${type} : ${incomeByType[type].count} ครั้ง เป็นเงิน ${incomeByType[type].amount.toLocaleString()} บาท\n`;
-    }
-    summaryText += `\n`;
-    
-    summaryText += `รายจ่าย : ${expenseCount} ครั้ง เป็นเงิน ${expenseTotal.toLocaleString()} บาท\n`;
-    for (const type in expenseByType) {
-        summaryText += `- ${type} : ${expenseByType[type].count} ครั้ง เป็นเงิน ${expenseByType[type].amount.toLocaleString()} บาท\n`;
-    }
-    summaryText += `\n`;
-    
-    summaryText += `สรุป : `;
-    if (incomeTotal === 0 && expenseTotal === 0) {
-        summaryText += `ไม่มีธุรกรรมการเงิน\n`;
-    } else {
-        summaryText += `${diffText}\n`;
-    }
-    
-    return summaryText;
-}
 
-/**
- * แสดงสรุปรายวันแบบเต็ม (ข้อความ + ตาราง)
- */
-function showDailySummary() {
-    const selectedDate = document.getElementById("summaryDate").value;
-    
-    if (!selectedDate) {
-        showToast("❌ กรุณาเลือกวันที่", 'error');
+    if (!hasData) {
+        showToast('⚠️ ไม่มีข้อมูลความเคลื่อนไหวในช่วงวันที่เลือก', 'error');
+        const tbody = document.getElementById("daily-summary-body");
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 20px; color: #dc3545;">ไม่มีข้อมูลความเคลื่อนไหวในช่วงวันที่เลือก</td></tr>';
+        }
         return;
     }
-    
-    if (!currentAccount) {
-        showToast("❌ กรุณาเลือกบัญชี", 'error');
-        return;
-    }
-    
-    // ✅ ส่วนข้อความสรุปละเอียด
-    const summaryText = generateDailySummaryText(selectedDate);
-    document.getElementById("dailySummaryText").innerText = summaryText;
-    
-    // ✅ ส่วนตารางสรุปหลายวัน
+
+    // สลับตัวแปรชั่วคราวเพื่อส่งให้ renderDailySummaryTable สร้างตาราง
+    const tempData = dailySummaryData;
+    dailySummaryData = filteredData;
     renderDailySummaryTable();
-    
-    showToast("✅ แสดงสรุปข้อมูลเรียบร้อย", 'success');
+    dailySummaryData = tempData; // คืนค่าตัวแปรหลักกลับ
+
+    showToast('✅ แสดงสรุปผลเรียบร้อย', 'success');
 }
 
 /**
