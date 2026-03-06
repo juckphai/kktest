@@ -4720,10 +4720,29 @@ function summarize() {
     const summaryResult = generateSummaryData(startDate, endDate);
     if (!summaryResult) return;
     
-    const startThai = startDate.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
+const startThai = startDate.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
     const endThai = endDate.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
     const thaiDateString = `${startThai} ถึง ${endThai}`;
     
+    // --- 🟢 ส่วนที่เพิ่มใหม่: คำนวณจำนวนวันทั้งหมด และ วันที่ทำธุรกรรม ---
+    // 1. คำนวณจำนวนวันทั้งหมดในช่วงวันที่เลือก
+    const calculatedTotalDays = Math.round((new Date(endDateStr).setHours(0, 0, 0, 0) - new Date(startDateStr).setHours(0, 0, 0, 0)) / (1000 * 60 * 60 * 24)) + 1;
+    
+    // 2. คำนวณจำนวนวันที่มีการทำธุรกรรม (นับจากวันที่ที่ไม่ซ้ำกันใน periodRecords)
+    const uniqueDates = new Set();
+    summaryResult.periodRecords.forEach(record => {
+        const dateOnly = record.dateTime.split(' ')[0]; // เอาเฉพาะ YYYY-MM-DD
+        uniqueDates.add(dateOnly);
+    });
+    const activeDaysCount = uniqueDates.size;
+    
+    // 3. คำนวณจำนวนวันที่ไม่ได้ทำธุรกรรม
+    const inactiveDaysCount = calculatedTotalDays - activeDaysCount;
+
+    // 4. สร้าง HTML String สำหรับแสดงผล
+    const transactionDaysInfo = `<p style="color: #673ab7; font-weight: bold;">จำนวนทั้งหมด ${calculatedTotalDays} วัน (ทำธุรกรรม ${activeDaysCount} วัน, ไม่ได้ทำ ${inactiveDaysCount} วัน)</p>`;
+    // --- 🟢 สิ้นสุดส่วนที่เพิ่มใหม่ ---
+
     // ✅ เพิ่มกล่องรับข้อความหมายเหตุ
     const remarkInput = prompt("กรุณากรอกหมายเหตุ (ถ้าไม่กรอกจะใช้ 'No comment'):", "No comment") || "No comment";
 
@@ -4731,7 +4750,9 @@ function summarize() {
         summaryResult: summaryResult,
         title: 'สรุปข้อมูลตามช่วงวันที่',
         dateString: `${startDateStr} ถึง ${endDateStr}`,
-        remark: remarkInput, // ✅ นำข้อความมาแสดง
+        remark: remarkInput, 
+        transactionDaysInfo: transactionDaysInfo, // 🟢 ส่งข้อความที่สร้างไว้เข้าไปแสดงผล
+        activeDays: activeDaysCount,              // 🟢 ส่งค่านี้เข้าไปเพื่อให้ระบบคำนวณ "รายได้/รายจ่าย เฉลี่ยต่อวัน" ให้ด้วย
         type: 'range',
         thaiDateString: thaiDateString,
         headerLine1: 'สรุปช่วงวันที่ :',
