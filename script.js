@@ -857,11 +857,17 @@ function isRecordEqual(rec1, rec2) {
  * บันทึกข้อมูลไปยัง Firebase
  */
 async function saveToFirebase() {
-    if (!currentUser || syncInProgress) return;
+    // STEP 2: ป้องกัน Sync ทับกัน (Race Condition)
+    if (!currentUser) return;
+    if (syncInProgress) {
+        console.log("⏳ Sync กำลังทำงานอยู่ -> ข้าม");
+        return;
+    }
 
-    const SHARED_ID = 'my_shared_group_01';
     syncInProgress = true;
     updateSyncStatus();
+
+    const SHARED_ID = 'my_shared_group_01';
 
     try {
         const mainDocRef = db.collection('users').doc(SHARED_ID);
@@ -958,18 +964,35 @@ function setupAccountListeners(SHARED_ID) {
             const accDocId = `${SHARED_ID}_${accName}`;
             console.log(`➕ เริ่มดักฟังบัญชี: ${accName}`);
             
+            // STEP 1 & STEP 4: แก้ไข Realtime Listener ป้องกันข้อมูลหาย และป้องกัน Listener ยิงตอน Sync
             unsubscribeMap[accName] = db.collection('users').doc(accDocId)
                 .onSnapshot((doc) => {
+                    // STEP 4: ป้องกัน Listener ยิงตอน Sync
+                    if (syncInProgress) {
+                        console.log("⏳ กำลัง Sync -> ไม่อัปเดต Local");
+                        return;
+                    }
+
                     if (!doc.exists) return;
+
                     const data = doc.data();
                     const serverRecords = data.records || [];
-                    
+
+                    // STEP 1: ป้องกันข้อมูลหาย ถ้า server ยังไม่มีข้อมูล
+                    if (serverRecords.length === 0) {
+                        console.log("⚠️ Server records ยังว่าง -> ข้ามการ sync เพื่อป้องกันข้อมูลหาย");
+                        return;
+                    }
+
+                    // ลบเฉพาะข้อมูลของบัญชีนี้ใน local
                     records = records.filter(r => r.account !== accName);
-                    
+
+                    // เพิ่มข้อมูลจาก server
                     records = records.concat(serverRecords);
-                    
+
+                    // เรียงข้อมูลใหม่
                     records.sort((a, b) => parseLocalDateTime(b.dateTime) - parseLocalDateTime(a.dateTime));
-                    
+
                     if (data.lastUpdated) {
                         let remoteTime;
                         if (typeof data.lastUpdated.toDate === 'function') {
@@ -1056,7 +1079,7 @@ function getTimeAgo(date) {
     if (diffMins < 60) return `${diffMins} นาทีที่แล้ว`;
     if (diffHours < 24) return `${diffHours} ชั่วโมงที่แล้ว`;
     if (diffDays === 1) return 'เมื่อวานนี้';
-    if (diffDays < 7) return `${diffDays} วันที่แล้ว`;
+    if (diffDays < 7) return `${diffDays} วันที่แล้ว';
     
     return date.toLocaleDateString('th-TH', {
         day: 'numeric',
