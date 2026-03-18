@@ -787,12 +787,6 @@ async function loadFromFirebase() {
             }
             backupPassword = data.backupPassword || null;
             
-            // 👇 เพิ่มส่วนนี้ลงไป
-            if (data.autoBackupConfig) {
-                autoBackupConfig = data.autoBackupConfig;
-                updateBackupStatusUI();
-            }
-            
             if (data.lastUpdated) {
                 if (typeof data.lastUpdated.toDate === 'function') {
                     lastSyncTime = data.lastUpdated.toDate();
@@ -859,9 +853,6 @@ async function loadFromFirebase() {
             showToast('✅ โหลดข้อมูลทุกบัญชีสำเร็จ!', 'success');
 
             setupRealtimeListener(); 
-            
-            // 👇 ให้เพิ่มบรรทัดนี้ลงไป (หลังจากโหลดเสร็จให้กระตุ้น Auto Backup ทำงานเบื้องหลัง)
-            triggerAutoBackupCheck();
 
         } else {
             console.log('No main data found in Firebase');
@@ -908,8 +899,6 @@ async function saveToFirebase() {
             currentAccount: currentAccount || null,
             accountTypes: Object.fromEntries(accountTypes || []),
             backupPassword: backupPassword || null,
-            // 👇 ให้เพิ่มบรรทัดนี้ลงไป 👇
-            autoBackupConfig: autoBackupConfig,
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
         });
 
@@ -3074,7 +3063,7 @@ function saveToLocal(fromPasswordSave = false) {
         records: [...records],
         accountTypes: Array.from(accountTypes.entries()),
         backupPassword: backupPassword,
-        autoBackupConfig: autoBackupConfig, // เพิ่มการบันทึก autoBackupConfig
+        // ✅ บันทึก dailySummaryData ด้วย (ถ้ามี)
         dailySummaryData: dailySummaryData || {}
     };
     try {
@@ -3101,15 +3090,10 @@ function loadFromLocal() {
             records = parsed.records || [];
             accountTypes = new Map(parsed.accountTypes || []);
             backupPassword = parsed.backupPassword || null; 
-            // ✅ โหลด autoBackupConfig (ถ้ามี)
-            if (parsed.autoBackupConfig) {
-                autoBackupConfig = parsed.autoBackupConfig;
-            }
             // ✅ โหลด dailySummaryData (ถ้ามี)
             dailySummaryData = parsed.dailySummaryData || {};
             
             renderBackupPasswordStatus();
-            updateBackupStatusUI(); // เพิ่มการอัปเดต UI การสำรองข้อมูล
             updateAccountSelect();
             if (currentAccount) {
                 document.getElementById('accountSelect').value = currentAccount;
@@ -3151,7 +3135,7 @@ async function handleSaveAs(format) {
             records, 
             accountTypes: Array.from(accountTypes.entries()), 
             backupPassword: null,
-            autoBackupConfig: autoBackupConfig, // เพิ่มการบันทึก autoBackupConfig
+            // ✅ บันทึก dailySummaryData ด้วย
             dailySummaryData: dailySummaryData || {}
         };
         let dataString = JSON.stringify(data, null, 2);
@@ -3464,11 +3448,6 @@ async function loadFromFile(event) {
                         records = finalDataToMerge.records;
                         accountTypes = new Map(finalDataToMerge.accountTypes);
                         currentAccount = finalDataToMerge.currentAccount;
-                        // ✅ โหลด autoBackupConfig (ถ้ามี)
-                        if (finalDataToMerge.autoBackupConfig) {
-                            autoBackupConfig = finalDataToMerge.autoBackupConfig;
-                            updateBackupStatusUI();
-                        }
                         // ✅ โหลด dailySummaryData (ถ้ามี)
                         dailySummaryData = finalDataToMerge.dailySummaryData || {};
                         showToast("✅ โหลดข้อมูลทั้งหมดจาก JSON สำเร็จ", 'success');
@@ -4662,9 +4641,6 @@ window.onload = function () {
         toggleGeneralSummaryMode();
     }
     
-    // โหลด autoBackupConfig จาก Local Storage
-    updateBackupStatusUI();
-    
     setTimeout(() => {
         toggleMainSection('account-section');
         
@@ -5014,255 +4990,4 @@ function summarize() {
     };
     
     openSummaryOutputModal();
-}
-
-// ==============================================
-// ☁️ ระบบ Auto Backup To Cloud Storage
-// ==============================================
-
-// ตัวแปรเก็บการตั้งค่า
-let autoBackupConfig = {
-    enabled: false,
-    keepDays: 3,
-    lastBackupDate: null // เก็บวันที่รูปแบบ YYYY-MM-DD
-};
-
-// อ้างอิง Firebase Storage (ต้องมี firebase.storage() พร้อมใช้งาน)
-const storage = typeof firebase !== 'undefined' && firebase.storage ? firebase.storage() : null;
-
-/**
- * บันทึกการตั้งค่า Auto Backup ลง Firebase และ Local
- */
-async function saveAutoBackupConfig() {
-    autoBackupConfig.enabled = document.getElementById('enableAutoBackup').checked;
-    autoBackupConfig.keepDays = parseInt(document.getElementById('backupKeepDays').value) || 3;
-    
-    // อัปเดต UI
-    updateBackupStatusUI();
-    
-    // บันทึกรวมกับข้อมูลหลัก
-    if (currentUser) {
-        await saveToFirebase();
-    } else {
-        saveToLocal();
-    }
-    showToast('💾 บันทึกการตั้งค่าสำรองข้อมูลแล้ว', 'success');
-}
-
-/**
- * อัปเดตข้อความแสดงสถานะในหน้าจอ
- */
-function updateBackupStatusUI() {
-    const enableCheckbox = document.getElementById('enableAutoBackup');
-    const keepDaysInput = document.getElementById('backupKeepDays');
-    const statusText = document.getElementById('lastBackupStatus');
-    
-    if (enableCheckbox) enableCheckbox.checked = autoBackupConfig.enabled;
-    if (keepDaysInput) keepDaysInput.value = autoBackupConfig.keepDays;
-    
-    if (!statusText) return;
-    
-    if (!autoBackupConfig.enabled) {
-        statusText.textContent = "ระบบสำรองข้อมูลอัตโนมัติ: ปิดการใช้งาน";
-    } else if (autoBackupConfig.lastBackupDate) {
-        statusText.textContent = `สำรองข้อมูลล่าสุดเมื่อ: ${formatThaiDate(autoBackupConfig.lastBackupDate)}`;
-    } else {
-        statusText.textContent = "ยังไม่เคยมีการสำรองข้อมูลอัตโนมัติ";
-    }
-}
-
-/**
- * ฟังก์ชันหลักที่ทำงานเบื้องหลัง
- */
-async function triggerAutoBackupCheck() {
-    if (!currentUser || !autoBackupConfig.enabled || !storage) return;
-
-    const todayStr = getCurrentLocalValues().date; // ได้ค่า YYYY-MM-DD
-    
-    // เช็กว่าวันนี้ทำไปหรือยัง?
-    if (autoBackupConfig.lastBackupDate === todayStr) {
-        console.log("☁️ Auto Backup: วันนี้มีการสำรองข้อมูลไปแล้ว ข้ามการทำงาน");
-        return;
-    }
-
-    // ถ้ายัง ให้เริ่มทำการสำรองข้อมูล
-    console.log("☁️ Auto Backup: เริ่มต้นสำรองข้อมูลของวันนี้...");
-    await processCloudBackup(todayStr);
-}
-
-/**
- * ฟังก์ชันกดสำรองข้อมูลเองแบบ Manual
- */
-async function manualTriggerBackup() {
-    if (!currentUser) {
-        showToast('❌ กรุณาเข้าสู่ระบบก่อนใช้งาน', 'error');
-        return;
-    }
-    if (!storage) {
-        showToast('❌ Firebase Storage ไม่พร้อมใช้งาน', 'error');
-        return;
-    }
-    const todayStr = getCurrentLocalValues().date;
-    showToast('☁️ กำลังเตรียมไฟล์เพื่อสำรองขึ้น Cloud...', 'info');
-    await processCloudBackup(todayStr, true);
-}
-
-/**
- * กระบวนการสร้างไฟล์ บีบอัด เข้ารหัส และอัปโหลด
- */
-async function processCloudBackup(dateStr, isManual = false) {
-    const SHARED_ID = 'my_shared_group_01';
-    
-    try {
-        // 1. เตรียมข้อมูลทั้งหมดเหมือนการ Save เป็น JSON
-        const exportData = {
-            accounts,
-            currentAccount,
-            records,
-            accountTypes: Array.from(accountTypes.entries()),
-            backupPassword: null, 
-            dailySummaryData: dailySummaryData || {},
-            backupDate: dateStr,
-            isAutoCloudBackup: true
-        };
-
-        let dataString = JSON.stringify(exportData);
-
-        // 2. เข้ารหัสถ้าระบบมีการตั้งรหัสผ่านไว้
-        if (backupPassword) {
-            const encryptedObject = await encryptData(dataString, backupPassword);
-            dataString = JSON.stringify(encryptedObject);
-        }
-
-        // 3. แปลงเป็น Blob
-        const blob = new Blob([dataString], { type: 'application/json' });
-        
-        // 4. อัปโหลดขึ้น Firebase Storage (path: backups/my_shared_group_01/backup_YYYY-MM-DD.json)
-        const fileName = `backup_${dateStr}.json`;
-        const storageRef = storage.ref(`backups/${SHARED_ID}/${fileName}`);
-        
-        await storageRef.put(blob);
-        
-        // 5. อัปเดตวันที่ล่าสุดและบันทึก
-        autoBackupConfig.lastBackupDate = dateStr;
-        updateBackupStatusUI();
-        await saveToFirebase(); // บันทึก config กลับไปที่ Firestore
-
-        if (isManual) {
-            showToast('✅ สำรองข้อมูลขึ้น Cloud สำเร็จ', 'success');
-        } else {
-            console.log('✅ Auto Backup: สำเร็จ');
-        }
-
-        // 6. เคลียร์ไฟล์เก่า (Rolling Delete)
-        await cleanupOldCloudBackups(SHARED_ID);
-
-    } catch (error) {
-        console.error("Auto Backup Error:", error);
-        if (isManual) showToast(`❌ สำรองข้อมูลไม่สำเร็จ: ${error.message}`, 'error');
-    }
-}
-
-/**
- * ลบไฟล์เก่าเกินจำนวนวันที่กำหนด
- */
-async function cleanupOldCloudBackups(SHARED_ID) {
-    if (!storage) return;
-    
-    try {
-        const folderRef = storage.ref(`backups/${SHARED_ID}/`);
-        const fileList = await folderRef.listAll();
-        
-        // ดึงเฉพาะไฟล์ที่เป็น JSON
-        let files = fileList.items;
-        
-        if (files.length <= autoBackupConfig.keepDays) {
-            console.log(`☁️ Cloud Cleanup: มีไฟล์ ${files.length} ไฟล์ ยังไม่เกินโควต้า (${autoBackupConfig.keepDays} วัน)`);
-            return;
-        }
-
-        // จัดเรียงชื่อไฟล์ (ชื่อไฟล์เป็นวันที่อยู่แล้ว backup_YYYY-MM-DD.json) -> เรียงจากเก่าไปใหม่
-        files.sort((a, b) => a.name.localeCompare(b.name));
-        
-        // คำนวณจำนวนไฟล์ที่ต้องลบ
-        const filesToDeleteCount = files.length - autoBackupConfig.keepDays;
-        
-        for (let i = 0; i < filesToDeleteCount; i++) {
-            const fileToDelete = files[i];
-            await fileToDelete.delete();
-            console.log(`🗑️ Cloud Cleanup: ลบไฟล์เก่า ${fileToDelete.name} เรียบร้อย`);
-        }
-    } catch (error) {
-        console.error("Cloud Cleanup Error:", error);
-    }
-}
-
-/**
- * เปิด Modal แสดงรายการไฟล์สำรอง
- */
-async function openCloudBackupListModal() {
-    if (!currentUser) {
-        showToast('❌ กรุณาเข้าสู่ระบบเพื่อดูไฟล์สำรองบน Cloud', 'error');
-        return;
-    }
-    if (!storage) {
-        showToast('❌ Firebase Storage ไม่พร้อมใช้งาน', 'error');
-        return;
-    }
-
-    const modal = document.getElementById('cloudBackupListModal');
-    const listDiv = document.getElementById('backupFilesList');
-    
-    if (!modal || !listDiv) {
-        showToast('❌ ไม่พบ Modal สำหรับแสดงไฟล์สำรอง', 'error');
-        return;
-    }
-    
-    modal.style.display = 'flex';
-    listDiv.innerHTML = '<p style="text-align: center; color: #888;">⏳ กำลังโหลดรายการไฟล์จากคลาวด์...</p>';
-
-    const SHARED_ID = 'my_shared_group_01';
-    
-    try {
-        const folderRef = storage.ref(`backups/${SHARED_ID}/`);
-        const fileList = await folderRef.listAll();
-        
-        if (fileList.items.length === 0) {
-            listDiv.innerHTML = '<p style="text-align: center; color: #dc3545;">ไม่มีไฟล์สำรองข้อมูลบนระบบ</p>';
-            return;
-        }
-
-        // เรียงใหม่ล่าสุดขึ้นก่อน (Z-A)
-        const files = fileList.items.sort((a, b) => b.name.localeCompare(a.name));
-        
-        let html = '';
-        for (const fileRef of files) {
-            // ดึงลิงก์ดาวน์โหลด
-            const url = await fileRef.getDownloadURL();
-            // ดึงวันที่จากชื่อไฟล์ (backup_2026-03-18.json -> 2026-03-18)
-            const dateMatch = fileRef.name.match(/backup_(.*?)\.json/);
-            const dateStr = dateMatch ? formatThaiDate(dateMatch[1]) : fileRef.name;
-
-            html += `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee;">
-                    <div>
-                        <span style="font-weight: bold; color: #0d47a1;">📅 ข้อมูลวันที่: ${dateStr}</span>
-                    </div>
-                    <a href="${url}" download="${fileRef.name}" style="background-color: #28a745; color: white; padding: 5px 15px; text-decoration: none; border-radius: 5px; font-size: 14px; text-align: center; min-width: 90px;" target="_blank" rel="noopener noreferrer">📥 โหลดไฟล์</a>
-                </div>
-            `;
-        }
-        listDiv.innerHTML = html;
-
-    } catch (error) {
-        console.error(error);
-        listDiv.innerHTML = '<p style="text-align: center; color: #dc3545;">❌ ไม่สามารถโหลดข้อมูลได้ โปรดลองใหม่</p>';
-    }
-}
-
-function closeCloudBackupListModal() {
-    const modal = document.getElementById('cloudBackupListModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
 }

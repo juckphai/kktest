@@ -257,31 +257,6 @@
                   </form>
                   <p id="password-status" style="font-weight: bold; margin-top: 15px; text-align:center;"></p>
                 </div>
-
-                <!-- ☁️ Auto Backup Section (เพิ่มตามคำแนะนำ) -->
-                <div class="sub-section-header" onclick="toggleSubSection('auto-backup-submenu')">
-                  <span>☁️ สำรองข้อมูลอัตโนมัติ (Cloud)</span>
-                  <span class="arrow">▶</span>
-                </div>
-                <div id="auto-backup-submenu" class="section-content sub-section-content">
-                  <div class="entry-form">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                      <label style="font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 10px;">
-                        <input type="checkbox" id="enableAutoBackup" style="width: 20px; height: 20px;" onchange="saveAutoBackupConfig()"> 
-                        เปิดใช้งานสำรองข้อมูลอัตโนมัติ
-                      </label>
-                    </div>
-                    <div class="entry-group">
-                      <label for="backupKeepDays">เก็บข้อมูลย้อนหลัง (วัน):</label>
-                      <input type="number" id="backupKeepDays" min="1" max="30" value="3" onchange="saveAutoBackupConfig()">
-                    </div>
-                    <div class="button-container" style="display: flex; gap: 10px; margin-top: 10px;">
-                      <button type="button" onclick="manualTriggerBackup()" style="flex: 1; background-color: #009688;">☁️ สำรองข้อมูลเดี๋ยวนี้</button>
-                      <button type="button" onclick="openCloudBackupListModal()" style="flex: 1; background-color: #673ab7;">📥 โหลดไฟล์สำรอง</button>
-                    </div>
-                    <p id="lastBackupStatus" style="font-size: 12px; color: #666; text-align: center; margin-top: 10px;">ตรวจสอบสถานะ...</p>
-                  </div>
-                </div>
                 
                 <div class="button-container" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
                   <button type="button" onclick="saveToLocal()" style="flex: 1; background-color: #17a2b8;">💾 บันทึกชั่วคราว</button>
@@ -469,7 +444,7 @@
 </style>
 
 <footer>
-    &copy; 180369 kunggi-phu. All Rights Reserved.
+    &copy; 120369 kunggi-phu. All Rights Reserved.
 </footer>
 
 <div id="changePasswordModal" class="modal-overlay">
@@ -634,30 +609,12 @@
   </div>
 </div>
 
-<!-- ☁️ Modal สำหรับแสดงรายการไฟล์สำรองบน Cloud (เพิ่มตามคำแนะนำ) -->
-<div id="cloudBackupListModal" class="modal-overlay">
-  <div class="format-modal-content" style="max-width: 500px;">
-    <h3>📥 ไฟล์สำรองข้อมูลบนคลาวด์</h3>
-    <p style="font-size: 13px; color: #666; margin-bottom: 15px;">คลิกที่ปุ่มเพื่อดาวน์โหลดไฟล์ลงเครื่อง จากนั้นสามารถใช้ปุ่ม "📂 โหลดข้อมูลบัญชี" เพื่อกู้คืนได้</p>
-    
-    <div id="backupFilesList" style="max-height: 300px; overflow-y: auto; text-align: left; margin-bottom: 20px; border: 1px solid #eee; padding: 10px; border-radius: 8px;">
-        <p style="text-align: center; color: #888;">กำลังโหลดข้อมูล...</p>
-    </div>
-
-    <div class="format-modal-buttons">
-      <button class="btn-cancel" onclick="closeCloudBackupListModal()" style="width: 100%;">❌ ปิดหน้าต่าง</button>
-    </div>
-  </div>
-</div>
-
 <div id="toast" class="toast-notification"></div>
 <div id="print-container"></div>
 
-<!-- Firebase Scripts (เพิ่ม firebase-storage-compat.js ตามคำแนะนำ) -->
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
 
 <script>
   // ✅✅✅ ตั้งค่า Firebase ใหม่ (ac-juck)
