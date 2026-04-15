@@ -346,10 +346,15 @@
                   </div>
 
                   <!-- Checkbox แสดงรายละเอียด -->
-                  <div style="text-align: center; margin-top: 8px;">
-                    <label style="cursor: pointer; display: inline-flex; align-items: center; gap: 5px; color: #333;">
-                      <input type="checkbox" id="showDetailsRange"> แสดงรายละเอียดรายการ
-                    </label>
+<div style="text-align: center; margin-top: 8px;">
+                      <label style="cursor: pointer; display: inline-flex; align-items: center; gap: 5px; color: #333;">
+                          <input type="checkbox" id="showDetailsRange" onchange="document.getElementById('detailsLimitContainer').style.display = this.checked ? 'flex' : 'none'"> แสดงรายละเอียดรายการ
+                      </label>
+                      <div id="detailsLimitContainer" style="display: none; align-items: center; justify-content: center; gap: 5px; margin-top: 5px;">
+                          <label for="detailsLimitInput" style="color: #333; font-size: 13px;">แสดงรายการล่าสุด:</label>
+                          <input type="number" id="detailsLimitInput" placeholder="ทั้งหมด" min="1" style="width: 70px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; text-align: center;">
+                          <span style="font-size: 13px; color: #333;">รายการ</span>
+                      </div>
                   </div>
 
                   <!-- ปุ่มสรุปข้อมูล -->
@@ -444,7 +449,7 @@
 </style>
 
 <footer>
-    &copy; 120369 kunggi-phu. All Rights Reserved.
+    &copy; 150469 kunggi-phu. All Rights Reserved.
 </footer>
 
 <div id="changePasswordModal" class="modal-overlay">
