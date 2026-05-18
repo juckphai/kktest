@@ -5120,6 +5120,72 @@ function summarize() {
     
     const summaryResult = generateSummaryData(startDate, endDate);
     if (!summaryResult) return;
+    const includeCarryForward = document.getElementById('includeCarryForwardSummary') ? document.getElementById('includeCarryForwardSummary').checked : false;
+
+    if (includeCarryForward) {
+        let cfIncome = 0;
+        let cfExpense = 0;
+        const accountSpecificTypes = accountTypes.get(currentAccount);
+
+        // คำนวณยอดเงินทั้งหมดก่อนถึง startDate
+        records.forEach(record => {
+            if (record.account !== currentAccount) return;
+            const recordDate = parseLocalDateTime(record.dateTime);
+            if (recordDate < startDate) {
+                if (accountSpecificTypes["รายรับ"].includes(record.type)) {
+                    cfIncome += parseFloat(record.amount) || 0;
+                } else if (accountSpecificTypes["รายจ่าย"].includes(record.type)) {
+                    cfExpense += parseFloat(record.amount) || 0;
+                }
+            }
+        });
+
+        const netBalance = cfIncome - cfExpense;
+
+        if (netBalance !== 0) {
+            const cfType = "ยอดยกมา";
+            const isIncome = netBalance > 0;
+            const absAmount = Math.abs(netBalance);
+
+            // 1. เพิ่มประเภท "ยอดยกมา" ลงในระบบชั่วคราวเพื่อให้แสดงสีถูกต้อง
+            if (isIncome) {
+                if (!accountSpecificTypes["รายรับ"].includes(cfType)) accountSpecificTypes["รายรับ"].push(cfType);
+            } else {
+                if (!accountSpecificTypes["รายจ่าย"].includes(cfType)) accountSpecificTypes["รายจ่าย"].push(cfType);
+            }
+
+            // 2. สร้างรายการจำลอง (ตั้งเวลาเป็น 00:00 ของวันเริ่มต้น)
+            const cfRecord = {
+                dateTime: startDateStr + " 00:00",
+                type: cfType,
+                description: "ยอดยกมาจากรอบบัญชีก่อนหน้า",
+                amount: absAmount,
+                account: currentAccount
+            };
+
+            // 3. แทรกรายการนี้ไปไว้บรรทัดบนสุดของตารางแสดงผล
+            summaryResult.periodRecords.unshift(cfRecord);
+
+            // 4. บวกยอดเข้าไปในผลสรุป (เพื่อให้ตัวเลขสอดคล้องกับรายการที่แสดง)
+            if (isIncome) {
+                summaryResult.summary.totalIncome += absAmount;
+                summaryResult.summary.incomeCount++;
+                if (!summaryResult.summary.income[cfType]) {
+                    summaryResult.summary.income[cfType] = { amount: 0, count: 0 };
+                }
+                summaryResult.summary.income[cfType].amount += absAmount;
+                summaryResult.summary.income[cfType].count++;
+            } else {
+                summaryResult.summary.totalExpense += absAmount;
+                summaryResult.summary.expenseCount++;
+                if (!summaryResult.summary.expense[cfType]) {
+                    summaryResult.summary.expense[cfType] = { amount: 0, count: 0 };
+                }
+                summaryResult.summary.expense[cfType].amount += absAmount;
+                summaryResult.summary.expense[cfType].count++;
+            }
+        }
+    }
     
     const startThai = startDate.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
     const endThai = endDate.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });

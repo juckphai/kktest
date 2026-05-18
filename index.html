@@ -341,7 +341,12 @@
                     <div id="generalLastXPreview" style="margin-top:10px; font-weight:bold; color: #009688;"></div>
                   </div>
 
-                  <div style="text-align: center; margin-top: 8px;">
+<div style="text-align: center; margin-top: 8px;">
+                      <div style="margin-bottom: 8px;">
+                          <label style="cursor: pointer; display: inline-flex; align-items: center; gap: 5px; color: #d81b60; font-weight: bold;">
+                              <input type="checkbox" id="includeCarryForwardSummary" style="width: 16px; height: 16px; accent-color: #d81b60;"> คำนวณยอดยกมา
+                          </label>
+                      </div>
                       <label style="cursor: pointer; display: inline-flex; align-items: center; gap: 5px; color: #333;">
                           <input type="checkbox" id="showDetailsRange" onchange="document.getElementById('detailsLimitContainer').style.display = this.checked ? 'flex' : 'none'"> แสดงรายละเอียดรายการ
                       </label>
@@ -439,7 +444,7 @@
 </style>
 
 <footer>
-    &copy; 190569 kunggi-phu. All Rights Reserved.
+    &copy; 210569 co-accypshop. All Rights Reserved.
 </footer>
 
 <div id="changePasswordModal" class="modal-overlay">
@@ -816,7 +821,6 @@ const firebaseConfig = {
   appId: "1:172801884398:web:b372300c744fee0d3d33ff"
 };
 
-
   if (!firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
     console.log("Firebase Initialized (Project: ac-juck).");
@@ -831,7 +835,7 @@ const firebaseConfig = {
   window.db = db;
 </script>
 
-<script src="script.js?v=20260517"></script>
+<script src="script.js?v=20260521"></script>
 
 <script>
   if ('serviceWorker' in navigator) {
