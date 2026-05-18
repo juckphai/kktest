@@ -2419,11 +2419,11 @@ function buildOriginalSummaryHtml(context) {
     const totalTransactionCount = summary.incomeCount + summary.expenseCount;
     const summaryDateTime = new Date().toLocaleString("th-TH", { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'}) + ' น.';
     
-    let averageHtml = '';
+let averageHtml = '';
     if (activeDays && activeDays >= 1) { 
-        const netTotal = summary.totalIncome - summary.totalExpense;
-        const avgNet = netTotal / activeDays; 
-        let avgText = "";
+        // ✅ ใช้ periodNetTotal ถ้ามี (เพื่อไม่รวมยอดยกมา) ถ้าไม่มีให้คำนวณจากยอดรวมปกติ
+        const netTotal = context.periodNetTotal !== undefined ? context.periodNetTotal : (summary.totalIncome - summary.totalExpense);
+        const avgNet = netTotal / activeDays;        let avgText = "";
         let avgColor = "";
 
         if (avgNet > 0) {
@@ -2561,9 +2561,10 @@ function buildPdfSummaryHtml(context) {
     const totalTransactionCount = summary.incomeCount + summary.expenseCount;
     const summaryDateTime = new Date().toLocaleString("th-TH", { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'}) + ' น.';
     
-    let averageHtml = '';
+let averageHtml = '';
     if (activeDays && activeDays >= 1) {
-        const netTotal = summary.totalIncome - summary.totalExpense;
+        // ✅ ใช้ periodNetTotal ถ้ามี (เพื่อไม่รวมยอดยกมา) ถ้าไม่มีให้คำนวณจากยอดรวมปกติ
+        const netTotal = context.periodNetTotal !== undefined ? context.periodNetTotal : (summary.totalIncome - summary.totalExpense);
         const avgNet = netTotal / activeDays;
         let avgText = "";
         let avgColor = "";
@@ -2653,11 +2654,12 @@ function handleSummaryOutput(choice) {
     if (choice === 'display') {
         const htmlForDisplay = buildOriginalSummaryHtml(summaryContext);
         openSummaryModal(htmlForDisplay);
-    } else if (choice === 'xlsx') {
-        const { summaryResult, title, dateString, remark, transactionDaysInfo, daysDiff, activeDays, detailsLimit, type } = summaryContext;
+} else if (choice === 'xlsx') {
+        // ✅ ดึง periodNetTotal ออกมาด้วยและส่งต่อไปให้ฟังก์ชัน export
+        const { summaryResult, title, dateString, remark, transactionDaysInfo, daysDiff, activeDays, detailsLimit, type, periodNetTotal } = summaryContext;
         const periodName = dateString; 
         const limitToPass = type === 'range' ? detailsLimit : null;
-        exportSummaryToXlsx(summaryResult, title, dateString, remark, transactionDaysInfo, periodName, daysDiff, activeDays, limitToPass);
+        exportSummaryToXlsx(summaryResult, title, dateString, remark, transactionDaysInfo, periodName, daysDiff, activeDays, limitToPass, periodNetTotal);
         showToast(`📊 สรุปข้อมูลบันทึกเป็นไฟล์ XLSX สำเร็จ`, 'success');
     } else if (choice === 'pdf') {
         const printContainer = document.getElementById('print-container');
@@ -4259,7 +4261,7 @@ async function decryptData(encryptedPayload, password) {
  * ส่งออกสรุปเป็น XLSX
  */
 // [แก้ไขเต็มรูปแบบ] ส่งออกไฟล์ Excel แบบจำกัดจำนวนรายการล่าสุด
-function exportSummaryToXlsx(summaryResult, title, dateString, remark, transactionDaysInfo = null, periodName, daysDiff = 0, activeDays = 0, detailsLimit = null) {
+function exportSummaryToXlsx(summaryResult, title, dateString, remark, transactionDaysInfo = null, periodName, daysDiff = 0, activeDays = 0, detailsLimit = null, periodNetTotal = undefined) {
     const { summary, periodRecords, totalBalance } = summaryResult;
     
     const wb = XLSX.utils.book_new();
@@ -4315,8 +4317,9 @@ function exportSummaryToXlsx(summaryResult, title, dateString, remark, transacti
     const totalTransactionCount = summary.incomeCount + summary.expenseCount;
     excelData.push(['ธุรกรรมทั้งหมด :', `${totalTransactionCount} ครั้ง`]);
     
-    if (activeDays && activeDays >= 1) {
-        const netTotal = summary.totalIncome - summary.totalExpense;
+if (activeDays && activeDays >= 1) {
+        // ✅ ใช้ periodNetTotal เพื่อไม่รวมยอดยกมา (ถ้ามี)
+        const netTotal = periodNetTotal !== undefined ? periodNetTotal : (summary.totalIncome - summary.totalExpense);
         const avgNet = netTotal / activeDays;
         let avgText = (avgNet > 0) ? `รายได้มากกว่ารายจ่ายเฉลี่ย : ${avgNet.toLocaleString()} บาท/วัน` : `รายจ่ายมากกว่ารายได้เฉลี่ย : ${Math.abs(avgNet).toLocaleString()} บาท/วัน`;
         excelData.push([]);
@@ -5118,8 +5121,12 @@ function summarize() {
         return;
     }
     
-    const summaryResult = generateSummaryData(startDate, endDate);
+const summaryResult = generateSummaryData(startDate, endDate);
     if (!summaryResult) return;
+    
+    // ✅ เก็บยอดสุทธิของช่วงเวลานี้ (ไม่รวมยอดยกมา) ไว้สำหรับคิดค่าเฉลี่ย
+    const periodNetTotal = summaryResult.summary.totalIncome - summaryResult.summary.totalExpense;
+    
     const includeCarryForward = document.getElementById('includeCarryForwardSummary') ? document.getElementById('includeCarryForwardSummary').checked : false;
 
     if (includeCarryForward) {
@@ -5203,13 +5210,14 @@ function summarize() {
 
     const remarkInput = prompt("กรุณากรอกหมายเหตุ (ถ้าไม่กรอกจะใช้ 'No comment'):", "No comment") || "No comment";
 
-    summaryContext = {
+summaryContext = {
         summaryResult: summaryResult,
         title: 'สรุปข้อมูลตามช่วงวันที่',
         dateString: `${startDateStr} ถึง ${endDateStr}`,
         remark: remarkInput, 
         transactionDaysInfo: transactionDaysInfo,
         activeDays: activeDaysCount,
+        periodNetTotal: periodNetTotal, // ✅ ส่งยอดสุทธิที่ไม่รวมยอดยกมาไปด้วย
         type: 'range',
         thaiDateString: thaiDateString,
         headerLine1: 'สรุปช่วงวันที่ :',
